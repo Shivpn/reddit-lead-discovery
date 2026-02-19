@@ -25,13 +25,13 @@ def init_auth_pool():
     global auth_pool
     
     try:
-        auth_pool = psycopg2.pool.SimpleConnectionPool(
-            1, 10,
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('AUTH_DB_NAME', 'auth_system'),  # Separate auth database
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'your_password')
+          auth_pool = psycopg2.pool.SimpleConnectionPool(
+          1, 10,
+          host=os.getenv('AUTH_DB_HOST', 'localhost'),
+          port=os.getenv('AUTH_DB_PORT', '5432'),
+          database=os.getenv('AUTH_DB_NAME', 'auth_system'),
+          user=os.getenv('AUTH_DB_USER', 'postgres'),
+          password=os.getenv('AUTH_DB_PASSWORD', 'your_password')
         )
         print("✅ Auth database connection pool created")
         return True
@@ -711,4 +711,5 @@ def update_user_profile(user_id, company_name, business_niche):
             cursor.close()
         if conn:
             return_auth_connection(conn)
+
 
