@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify OTP - Reddit Lead Discovery</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>Verify Your Email</h1>
+            <p class="auth-subtitle">Enter the 6-digit code sent to your email</p>
+            <p id="emailHint" class="email-hint"></p>
+
+            <div id="errorMsg"   class="msg error-msg"   style="display:none;"></div>
+            <div id="successMsg" class="msg success-msg" style="display:none;"></div>
+
+            <form id="otpForm">
+                <input type="text" name="otp" placeholder="000000" maxlength="6"
+                       required autocomplete="one-time-code"
+                       style="letter-spacing: 8px; font-size: 24px; text-align: center;">
+                <!-- Only shown for password reset -->
+                <div id="newPasswordField" style="display:none;">
+                    <input type="password" name="new_password" placeholder="Enter new password (min 6 chars)">
+                </div>
+                <button type="submit">Verify</button>
+            </form>
+
+            <p><a href="#" id="resendOtp">Resend OTP</a></p>
+            <p><a href="/login">← Back to Login</a></p>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+</body>
+</html>

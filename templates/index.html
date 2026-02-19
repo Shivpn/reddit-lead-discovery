@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Lead Discovery - Anatech Consultancy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="branding">
+                    <h1>Anatech Consultancy</h1>
+                    <span class="subtitle">AI-Powered Lead Discovery Platform</span>
+                </div>
+                <div class="header-actions">
+                    <button id="userNameBtn" class="user-greeting-btn">
+                    👤 <span id="userName"></span> ▼
+                    </button>
+                    <button id="viewSavedBtn" class="btn btn-primary btn-sm">
+                        <span class="icon">💾</span> Saved (<span id="savedCount">0</span>)
+                    </button>
+                    <button id="testConnectionBtn" class="btn btn-secondary btn-sm">
+                        <span class="icon">⚙</span> Test APIs
+                    </button>
+                    <button id="logoutBtn" class="btn btn-danger btn-sm">
+                        <span class="icon">🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            
+            <!-- Step 1: Discovery -->
+            <section class="wizard-section" id="step1Section">
+                <div class="section-header">
+                    <div class="step-indicator">
+                        <span class="step-number">1</span>
+                        <div class="step-info">
+                            <h2>Describe Your Business</h2>
+                            <p>Enter your product, service, niche, or goal</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-body">
+                    <div class="prompt-input-container">
+                        <div class="business-fields">
+                            <div class="business-field-row">
+                                <div class="field-group">
+                                    <label for="companyName">Company Name</label>
+                                    <input 
+                                        type="text"
+                                        id="companyName"
+                                        class="business-input"
+                                        placeholder="e.g. Anatech Consultancy"
+                                    >
+                                </div>
+                                <div class="field-group">
+                                    <label for="businessNiche">Business Niche / Industry</label>
+                                    <input 
+                                        type="text"
+                                        id="businessNiche"
+                                        class="business-input"
+                                        placeholder="e.g. Digital Marketing, SaaS, E-commerce"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                        <textarea 
+                            id="userPrompt" 
+                            class="prompt-textarea" 
+                            placeholder="Describe what your business does and what kind of customers you're looking for. e.g. I help small businesses grow their online presence through SEO and social media..."
+                            rows="4"
+                        ></textarea>
+                        <button id="discoverBtn" class="btn btn-primary btn-large">
+                            <span class="icon">🔍</span> Discover Relevant Subreddits
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: Subreddit Selection -->
+             
+            <section class="wizard-section hidden" id="step2Section">
+                <div class="section-header">
+                    <div class="step-indicator">
+                        <span class="step-number">2</span>
+                        <div class="step-info">
+                            <h2>Select Target Subreddits</h2>
+                            <p>Choose where to find your ideal leads</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-body">
+                    
+                       <!-- ADD THIS SECTION HERE -->
+                    <div class="manual-entry-section">
+                        <h3>Or Add Subreddits Manually</h3>
+                      <div class="manual-entry-form">
+                    <input 
+                    type="text" 
+                    id="manualSubredditInput" 
+                    class="form-control" 
+                    placeholder="Enter subreddit name (without r/)"
+                    />
+                  <button id="addManualBtn" class="btn btn-secondary">
+                <span class="icon">➕</span> Add
+                  </button>
+                    </div>
+               <div id="manualSubreddits" class="manual-subs-list"></div>
+               </div>
+               <!-- END OF ADDED SECTION -->
+    
+                    
+                    <div id="subredditGrid" class="subreddit-grid">
+                        <!-- Subreddit cards will be inserted here -->
+                    </div>
+                    
+                    <div class="action-bar">
+                        <div class="selection-info">
+                            <span id="selectedCount">0</span> subreddits selected
+                        </div>
+                        <div class="action-buttons">
+                            <button id="backToStep1" class="btn btn-secondary">
+                                <span class="icon">←</span> Back
+                            </button>
+                            <button id="fetchLeadsBtn" class="btn btn-primary" disabled>
+                                <span class="icon">📊</span> Fetch & Analyze Leads
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Leads Display -->
+            <section class="wizard-section hidden" id="step3Section">
+                <div class="section-header">
+                    <div class="step-indicator">
+                        <span class="step-number">3</span>
+                        <div class="step-info">
+                            <h2>Discovered Leads</h2>
+                            <p>Ranked by relevance and potential value</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Dashboard -->
+                <div class="stats-dashboard">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Discovered</div>
+                        <div class="stat-value" id="totalLeads">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Excellent (80+)</div>
+                        <div class="stat-value" id="excellentLeads">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Good (60-79)</div>
+                        <div class="stat-value" id="goodLeads">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Average Score</div>
+                        <div class="stat-value" id="avgScore">0</div>
+                    </div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="filter-bar">
+                    <div class="filter-left">
+                        <label for="minScoreFilter">Minimum Score:</label>
+                        <select id="minScoreFilter" class="form-select">
+                            <option value="40">All Qualified (40+)</option>
+                            <option value="50">Moderate (50+)</option>
+                            <option value="60" selected>Good (60+)</option>
+                            <option value="70">High Quality (70+)</option>
+                            <option value="80">Excellent (80+)</option>
+                        </select>
+                    </div>
+                    <div class="filter-right">
+                        <button id="newSearchBtn" class="btn btn-secondary btn-sm">
+                            <span class="icon">🔄</span> New Search
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Leads List -->
+                <div id="leadsList" class="leads-list">
+                    <!-- Lead cards will be inserted here -->
+                </div>
+            </section>
+
+             <!-- Saved Leads Section -->
+            <section class="wizard-section hidden" id="savedLeadsSection">
+                <div class="section-header">
+                    <div class="step-indicator">
+                        <span class="step-number">💾</span>
+                        <div class="step-info">
+                            <h2>Saved Leads</h2>
+                            <p>Your bookmarked opportunities</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-dashboard">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Saved</div>
+                        <div class="stat-value" id="totalSaved">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">High Quality</div>
+                        <div class="stat-value" id="highQualitySaved">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Not Contacted</div>
+                        <div class="stat-value" id="notContactedCount">0</div>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <div class="filter-left">
+                        <button id="backToLeadsBtn" class="btn btn-secondary btn-sm">
+                            <span class="icon">←</span> Back to Discovered Leads
+                        </button>
+                    </div>
+                </div>
+
+                <div id="savedLeadsList" class="leads-list">
+                    <!-- Saved leads appear here -->
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingText">Processing...</p>
+        </div>
+    </div>
+
+    <!-- AI Response Modal -->
+    <div id="aiResponseModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>AI-Generated Response</h3>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="aiResponseText" class="ai-response-text"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="copyResponseBtn" class="btn btn-primary">
+                    <span class="icon">📋</span> Copy Response
+                </button>
+                <button id="closeModalBtn" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container">
+            <p>&copy; 2024 Anatech Consultancy. All rights reserved.</p>
+            <p class="disclaimer">
+                <strong>Reddit Compliance:</strong> This platform is read-only and follows all Reddit API guidelines. 
+                No automated posting. All engagement must be manual and authentic.
+            </p>
+        </div>
+    </footer>
+
+        <div id="profileModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Profile</h3>
+                <button class="modal-close" id="closeProfileModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="profileCompanyName">Company Name</label>
+                    <input type="text" id="profileCompanyName" class="form-control" placeholder="Your Company">
+                </div>
+                <div class="form-group">
+                    <label for="profileBusinessNiche">Business Niche</label>
+                    <input type="text" id="profileBusinessNiche" class="form-control" placeholder="Industry/Niche">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveProfileBtn" class="btn btn-primary">Save Changes</button>
+                <button id="closeProfileModalBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Profile Edit Modal -->
+
+</body>
+</html>

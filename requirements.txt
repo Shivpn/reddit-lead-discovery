@@ -1,0 +1,10 @@
+Flask
+python-dotenv
+praw
+groq
+requests
+Flask-CORS
+psycopg2-binary
+psycopg2  
+bcrypt
+PyJWT 
