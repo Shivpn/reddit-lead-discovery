@@ -30,9 +30,6 @@ body {
     line-height: 1.6;
 }
 
-body.auth-loading {
-    visibility: hidden;
-}
 
 .container {
     max-width: 1400px;
@@ -920,3 +917,4 @@ body.auth-loading {
     }
 
 }
+
