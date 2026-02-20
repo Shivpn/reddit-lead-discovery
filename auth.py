@@ -28,11 +28,11 @@ def init_auth_pool():
         auth_pool = psycopg2.pool.SimpleConnectionPool(
             1,
             10,
-            host=os.getenv("AUTH_DB_HOST", "localhost"),
-            port=os.getenv("AUTH_DB_PORT", "5432"),
-            database=os.getenv("AUTH_DB_NAME", "auth_system"),
+            host=os.getenv("AUTH_DB_HOST", "metro.proxy.rlwy.net"),
+            port=os.getenv("AUTH_DB_PORT", "11630"),
+            database=os.getenv("AUTH_DB_NAME", "railway"),
             user=os.getenv("AUTH_DB_USER", "postgres"),
-            password=os.getenv("AUTH_DB_PASSWORD", "your_password"),
+            password=os.getenv("AUTH_DB_PASSWORD", "dBrxuaWHyXLqNLjmzwpTGTxmQYKJyHDX"),
         )
         print("✅ Auth database connection pool created")
         return True
@@ -712,6 +712,7 @@ def update_user_profile(user_id, company_name, business_niche):
             cursor.close()
         if conn:
             return_auth_connection(conn)
+
 
 
 
