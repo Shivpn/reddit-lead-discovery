@@ -1025,17 +1025,27 @@ def test_connection():
 # AUTHENTICATION ROUTES  (completely unchanged)
 # =====================================================
 
+import threading
+
 @app.route('/api/auth/signup', methods=['POST'])
 def api_signup():
-    data   = request.json
+    data = request.json
+
     result = signup_user(
         email=data.get('email'),
         password=data.get('password'),
         full_name=data.get('full_name')
     )
+
     if result['success'] and 'otp' in result:
-        send_otp_email(data['email'], result['otp'], 'signup')
+        threading.Thread(
+            target=send_otp_email,
+            args=(data['email'], result['otp'], 'signup'),
+            daemon=True
+        ).start()
+
         del result['otp']
+
     return jsonify(result)
 
 
