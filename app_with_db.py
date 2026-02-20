@@ -1037,13 +1037,16 @@ def api_signup():
         full_name=data.get('full_name')
     )
 
+    # ✅ SEND EMAIL SYNCHRONOUSLY (Railway-safe)
     if result['success'] and 'otp' in result:
-        threading.Thread(
-            target=send_otp_email,
-            args=(data['email'], result['otp'], 'signup'),
-            daemon=True
-        ).start()
+        email_result = send_otp_email(
+            data['email'],
+            result['otp'],
+            'signup'
+        )
+        print("📨 OTP email result:", email_result)
 
+        # never return OTP to frontend in production
         del result['otp']
 
     return jsonify(result)
