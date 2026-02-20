@@ -274,35 +274,32 @@ def get_welcome_email_template(user_name):
 # =====================================================
 
 def send_email(to_email, subject, html_content):
-    """
-    Send email using SMTP
-    
-    Returns:
-        dict: {'success': bool, 'message': str}
-    """
     try:
-        # Create message
+        print("📧 SMTP DEBUG START")
+        print("SMTP_SERVER:", SMTP_SERVER)
+        print("SMTP_PORT:", SMTP_PORT)
+        print("SMTP_USER:", SMTP_USER)
+        print("PASSWORD SET:", bool(SMTP_PASSWORD))
+
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = f"{FROM_NAME} <{FROM_EMAIL}>"
         msg['To'] = to_email
-        
-        # Attach HTML content
+
         html_part = MIMEText(html_content, 'html')
         msg.attach(html_part)
-        
-        # Connect to SMTP server
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()  # Secure connection
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=20) as server:
+            server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(FROM_EMAIL, to_email, msg.as_string())
-        
+
         print(f"✅ Email sent to {to_email}")
-        return {'success': True, 'message': 'Email sent successfully'}
-        
+        return {'success': True}
+
     except Exception as e:
-        print(f"❌ Email error: {str(e)}")
-        return {'success': False, 'message': f'Failed to send email: {str(e)}'}
+        print("❌ EMAIL FAILURE:", repr(e))
+        return {'success': False, 'message': str(e)}
 
 
 # =====================================================
@@ -337,3 +334,4 @@ if __name__ == '__main__':
     result = send_welcome_email('test@example.com', 'John Doe')
 
     print(f"Welcome Email: {result}")
+
