@@ -33,6 +33,7 @@ def init_auth_pool():
             database=os.getenv("AUTH_DB_NAME", "railway"),
             user=os.getenv("AUTH_DB_USER", "postgres"),
             password=os.getenv("AUTH_DB_PASSWORD", "dBrxuaWHyXLqNLjmzwpTGTxmQYKJyHDX"),
+            sslmode="require",
         )
         print("✅ Auth database connection pool created")
         return True
@@ -712,6 +713,7 @@ def update_user_profile(user_id, company_name, business_niche):
             cursor.close()
         if conn:
             return_auth_connection(conn)
+
 
 
 
