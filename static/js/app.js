@@ -129,7 +129,7 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
-(function checkAuth() {
+/*(function checkAuth() {
     const token = localStorage.getItem('session_token');
     if (!token) { window.location.href = '/login'; return; }
     fetch('/api/auth/check-session', {
@@ -148,6 +148,39 @@ function escapeHtml(text) {
     }
 })
     .catch(() => console.warn('Session check failed — server may be down.'));
+})();*/*
+
+(function checkAuth() {
+    const token = localStorage.getItem('session_token');
+
+    // ❌ no token → go login immediately
+    if (!token) {
+        window.location.replace('/login');
+        return;
+    }
+
+    fetch('/api/auth/check-session', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.valid) {
+            localStorage.removeItem('session_token');
+            window.location.replace('/login');
+        } else {
+            // ✅ ONLY NOW show the app (prevents flicker)
+            document.body.classList.remove('auth-loading');
+
+            const nameEl = document.getElementById('userName');
+            if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
+
+            updateSavedCount();
+            loadUserProfile();
+        }
+    })
+    .catch(() => {
+        window.location.replace('/login');
+    });
 })();
 
 // ===== LOGOUT =====
@@ -946,3 +979,4 @@ window.dismissPost = dismissPost;
 console.log('🚀 AI Lead Discovery Platform initialized');
 
 console.log('📝 Enter your product/service description to begin');
+
