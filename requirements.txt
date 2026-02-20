@@ -8,3 +8,4 @@ psycopg2-binary
 psycopg2  
 bcrypt
 PyJWT 
+gunicorn==21.2.0
