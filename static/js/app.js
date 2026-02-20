@@ -61,6 +61,32 @@ const elements = {
 };
 
 // ===== UTILITY FUNCTIONS =====
+
+(function checkAuth() {
+    const token = localStorage.getItem('session_token');
+
+    if (!token) {
+        window.location.replace('/login');
+        return;
+    }
+
+    fetch('/api/auth/check-session', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.valid) {
+            localStorage.removeItem('session_token');
+            window.location.replace('/login');
+        } else {
+            document.body.classList.remove('auth-loading');
+        }
+    })
+    .catch(() => {
+        window.location.replace('/login');
+    });
+})();
+
 function showLoading(text = 'Processing...') {
     elements.loadingText.textContent = text;
     elements.loadingOverlay.classList.remove('hidden');
@@ -918,4 +944,5 @@ window.dismissPost = dismissPost;
 
 // ===== INITIALIZATION =====
 console.log('🚀 AI Lead Discovery Platform initialized');
+
 console.log('📝 Enter your product/service description to begin');
