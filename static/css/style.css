@@ -30,6 +30,10 @@ body {
     line-height: 1.6;
 }
 
+body.auth-loading {
+    visibility: hidden;
+}
+
 .container {
     max-width: 1400px;
     margin: 0 auto;
@@ -914,4 +918,5 @@ body {
     .lead-header {
         flex-direction: column;
     }
+
 }
