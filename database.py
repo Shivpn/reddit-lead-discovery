@@ -30,11 +30,11 @@ def init_db_pool():
         connection_pool = psycopg2.pool.SimpleConnectionPool(
             1,  # Minimum number of connections
             10, # Maximum number of connections
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'postgres'),
+            host=os.getenv('DB_HOST', 'caboose.proxy.rlwy.net'),
+            port=os.getenv('DB_PORT', '46006'),
+            database=os.getenv('DB_NAME', 'railway'),
             user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'your_password')
+            password=os.getenv('DB_PASSWORD', 'SFInAexrrqTRMcZelVliSsmPtYAsqoYo')
         )
         print("✅ PostgreSQL connection pool created successfully")
         return True
@@ -549,4 +549,5 @@ def cleanup_expired_dismissed_posts():
         if cursor:
             cursor.close()
         if conn: 
+
             return_db_connection(conn)
