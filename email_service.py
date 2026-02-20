@@ -254,7 +254,7 @@ def get_welcome_email_template(user_name):
             </div>
             
             <div class="cta">
-                <a href="http://localhost:5000" class="button">Start Discovering Leads</a>
+                <a href="reddit-lead-discovery-production.up.railway.app" class="button">Start Discovering Leads</a>
             </div>
             
             <p><strong>Your Plan:</strong> Free (100 queries per month)</p>
@@ -335,4 +335,5 @@ if __name__ == '__main__':
     
     # Test welcome email
     result = send_welcome_email('test@example.com', 'John Doe')
+
     print(f"Welcome Email: {result}")
