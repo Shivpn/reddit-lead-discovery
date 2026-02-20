@@ -103,25 +103,38 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
+// Immediately hide the page to prevent dashboard flash before auth check completes
+document.documentElement.style.visibility = 'hidden';
+
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
-    if (!token) { window.location.href = '/login'; return; }
+    if (!token) {
+        // No token at all — redirect immediately, no flash
+        window.location.replace('/login');
+        return;
+    }
     fetch('/api/auth/check-session', {
         headers: { 'Authorization': `Bearer ${token}` }
     })
     .then(r => r.json())
     .then(data => {
-    if (!data.valid) {
-        localStorage.removeItem('session_token');
-        window.location.href = '/login';
-    } else {
-        const nameEl = document.getElementById('userName');
-        if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
-        updateSavedCount();
-        loadUserProfile();  // ← NEW: Load profile
-    }
-})
-    .catch(() => console.warn('Session check failed — server may be down.'));
+        if (!data.valid) {
+            localStorage.removeItem('session_token');
+            window.location.replace('/login');
+        } else {
+            // Auth confirmed — reveal the page
+            document.documentElement.style.visibility = '';
+            const nameEl = document.getElementById('userName');
+            if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
+            updateSavedCount();
+            loadUserProfile();
+        }
+    })
+    .catch(() => {
+        // On network error, still reveal page so user isn't stuck on blank screen
+        document.documentElement.style.visibility = '';
+        console.warn('Session check failed — server may be down.');
+    });
 })();
 
 // ===== LOGOUT =====
@@ -414,14 +427,14 @@ function renderLeads() {
            </button>
             `}
                       ${!lead.ai_response_generated ? `
-                <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
+                <button class="btn btn-success btn-sm btn-generate-ai" data-post-id="${escapeHtml(String(lead.id))}">
                     <span class="icon">🤖</span> Generate AI Response
                 </button>
                 ` : `
-                <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
+                <button class="btn btn-secondary btn-sm btn-view-response" data-post-id="${escapeHtml(String(lead.id))}">
                     <span class="icon">👁</span> View Full Response
                 </button>
-                <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
+                <button class="btn btn-secondary btn-sm btn-copy-response" data-post-id="${escapeHtml(String(lead.id))}">
                     <span class="icon">📋</span> Copy Response
                 </button>
                 `}
@@ -429,6 +442,32 @@ function renderLeads() {
         </div>
     `).join('');
 }
+// ===== EVENT DELEGATION FOR LEAD BUTTONS =====
+// Using event delegation prevents inline onclick issues with special characters in post IDs
+document.addEventListener('click', function(e) {
+    // Generate AI Response button
+    const generateBtn = e.target.closest('.btn-generate-ai');
+    if (generateBtn) {
+        const postId = generateBtn.dataset.postId;
+        if (postId) generateAIResponse(postId);
+        return;
+    }
+    // View Response button
+    const viewBtn = e.target.closest('.btn-view-response');
+    if (viewBtn) {
+        const postId = viewBtn.dataset.postId;
+        if (postId) showResponseModal(postId);
+        return;
+    }
+    // Copy Response button
+    const copyBtn = e.target.closest('.btn-copy-response');
+    if (copyBtn) {
+        const postId = copyBtn.dataset.postId;
+        if (postId) copyResponse(postId);
+        return;
+    }
+});
+
 // ===== SAVE LEAD TO DATABASE =====
 async function saveLead(postId) {
     showLoading('Saving lead to database...');
@@ -920,5 +959,3 @@ window.dismissPost = dismissPost;
 console.log('🚀 AI Lead Discovery Platform initialized');
 
 console.log('📝 Enter your product/service description to begin');
-
-
