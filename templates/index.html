@@ -4,16 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Lead Discovery - Anatech Consultancy</title>
-  
-    <style>html { visibility: hidden; }</style>
-    <script>
-        (function () {
-            if (!localStorage.getItem('session_token')) {
-                window.location.replace('/login');
-            }
-            // If token exists: do nothing — stay hidden until app.js validates it.
-        }());
-    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="auth-loading">
