@@ -4,25 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Lead Discovery - Anatech Consultancy</title>
-
+  
     <style>html { visibility: hidden; }</style>
     <script>
-        (function() {
-            var token = localStorage.getItem('session_token');
-            if (!token) {
-                // No token at all — redirect before a single pixel is painted
+        (function () {
+            if (!localStorage.getItem('session_token')) {
                 window.location.replace('/login');
-            } else {
-                // Token exists — keep hidden, set a hard reveal timeout as safety net
-                // app.js will call document.documentElement.style.visibility = ''
-                // once it confirms the session is valid. If app.js never runs or
-                // the API is down, this timeout ensures the user isn't stuck on a
-                // blank white screen forever.
-                window._authRevealTimeout = setTimeout(function() {
-                    document.documentElement.style.visibility = '';
-                }, 4000);
             }
-        })();
+            // If token exists: do nothing — stay hidden until app.js validates it.
+        }());
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
