@@ -61,6 +61,7 @@ const elements = {
 };
 
 // ===== UTILITY FUNCTIONS =====
+
 function showLoading(text = 'Processing...') {
     elements.loadingText.textContent = text;
     elements.loadingOverlay.classList.remove('hidden');
@@ -103,52 +104,38 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
-// The <style>html{visibility:hidden}</style> in index.html <head> hides the page
-// before a single pixel is painted. This function validates the token and either:
-//   • reveals the page (valid session), or
-//   • redirects to /login (invalid/expired session OR network error).
-// There is NO reveal-on-error fallback — if something goes wrong, we always
-// redirect to /login. This is the only way to guarantee zero dashboard flash.
+document.documentElement.style.visibility = 'hidden';
+
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
     if (!token) {
-        // Inline script already handles this, but guard here too.
+        // No token at all — redirect immediately, no flash
         window.location.replace('/login');
         return;
     }
-
-    // Called only when we have confirmed the session is valid.
-    function revealPage() {
-        document.documentElement.style.visibility = '';
-    }
-
     fetch('/api/auth/check-session', {
         headers: { 'Authorization': `Bearer ${token}` }
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.valid) {
-            // ✅ Valid session — show the dashboard
-            revealPage();
+    .then(r => r.json())
+    .then(data => {
+        if (!data.valid) {
+            localStorage.removeItem('session_token');
+            window.location.replace('/login');
+        } else {
+            // Auth confirmed — reveal the page
+            document.documentElement.style.visibility = '';
             const nameEl = document.getElementById('userName');
             if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
             updateSavedCount();
             loadUserProfile();
-        } else {
-            // ❌ Session expired or invalid — clean up and go to login.
-            // Page stays hidden; the redirect happens before anything is visible.
-            localStorage.removeItem('session_token');
-            window.location.replace('/login');
         }
     })
-    .catch(function() {
-        // ❌ Network error (server down, timeout, etc.)
-        // Redirect to login rather than revealing a broken blank page.
-        // The user will see the login page and can retry.
-        localStorage.removeItem('session_token');
-        window.location.replace('/login');
+    .catch(() => {
+        // On network error, still reveal page so user isn't stuck on blank screen
+        document.documentElement.style.visibility = '';
+        console.warn('Session check failed — server may be down.');
     });
-}());
+})();
 
 // ===== LOGOUT =====
 async function logout() {
@@ -202,7 +189,7 @@ async function discoverSubreddits() {
         return;
     }
     
-    // Save profile if company/niche provided and not already saved
+        // Save profile if company/niche provided and not already saved
     if ((company || niche) && (!userProfile.company_name || !userProfile.business_niche)) {
         await apiCall('/api/profile/update', {
             method: 'POST',
@@ -273,7 +260,6 @@ function updateSelectionCount() {
     elements.selectedCount.textContent = selectedSubreddits.length;
     elements.fetchLeadsBtn.disabled = selectedSubreddits.length === 0;
 }
-
 // ===== MANUAL SUBREDDIT ENTRY =====
 function renderManualSubreddits() {
     elements.manualSubreddits.innerHTML = manualSubreddits.map(sub => `
@@ -294,16 +280,19 @@ window.removeManualSub = removeManualSub;
 
 // ===== STEP 2: FETCH LEADS =====
 async function fetchLeads() {
-    const allSubreddits = [...selectedSubreddits, ...manualSubreddits];
+    const allSubreddits = [...selectedSubreddits, ...manualSubreddits]; // COMBINE BOTH
     
-    if (allSubreddits.length === 0) {
+    if (allSubreddits.length === 0) { // CHECK COMBINED
         showToast('Please select at least one subreddit', 'error');
         return;
     }
     
-    showLoading(`Fetching posts from ${allSubreddits.length} subreddit(s)...`);
+    showLoading(`Fetching posts from ${allSubreddits.length} subreddit(s)...`); // USE COMBINED
+    
+    showLoading(`Fetching posts from ${selectedSubreddits.length} subreddit(s)...`);
     
     try {
+        // Add delay to show loading state
         await new Promise(resolve => setTimeout(resolve, 500));
         
         elements.loadingText.textContent = 'AI is analyzing posts for relevance...';
@@ -422,22 +411,22 @@ function renderLeads() {
             ` : ''}
             
             <div class="lead-actions">
-                <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
-                    <span class="icon">🔗</span> View on Reddit
-                </a>
-                <button onclick="dismissPost('${lead.id}')" class="btn btn-secondary btn-sm">
-                    <span class="icon">👁‍🗨</span> Mark as Read
-                </button>
-                ${!lead.is_saved ? `
-                <button onclick="saveLead('${lead.id}')" class="btn btn-success btn-sm">
-                    <span class="icon">💾</span> Save Lead
-                </button>
-                ` : `
-                <button class="btn btn-secondary btn-sm" disabled>
-                    <span class="icon">✓</span> Saved
-                </button>
-                `}
-                ${!lead.ai_response_generated ? `
+            <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
+            <span class="icon">🔗</span> View on Reddit
+            </a>
+            <button onclick="dismissPost('${lead.id}')" class="btn btn-secondary btn-sm">
+            <span class="icon">👁‍🗨</span> Mark as Read
+            </button>
+           ${!lead.is_saved ? `
+           <button onclick="saveLead('${lead.id}')" class="btn btn-success btn-sm">
+           <span class="icon">💾</span> Save Lead
+           </button>
+           ` : `
+           <button class="btn btn-secondary btn-sm" disabled>
+           <span class="icon">✓</span> Saved
+           </button>
+            `}
+                      ${!lead.ai_response_generated ? `
                 <button class="btn btn-success btn-sm btn-generate-ai" data-post-id="${escapeHtml(String(lead.id))}">
                     <span class="icon">🤖</span> Generate AI Response
                 </button>
@@ -453,21 +442,24 @@ function renderLeads() {
         </div>
     `).join('');
 }
-
 // ===== EVENT DELEGATION FOR LEAD BUTTONS =====
+// Using event delegation prevents inline onclick issues with special characters in post IDs
 document.addEventListener('click', function(e) {
+    // Generate AI Response button
     const generateBtn = e.target.closest('.btn-generate-ai');
     if (generateBtn) {
         const postId = generateBtn.dataset.postId;
         if (postId) generateAIResponse(postId);
         return;
     }
+    // View Response button
     const viewBtn = e.target.closest('.btn-view-response');
     if (viewBtn) {
         const postId = viewBtn.dataset.postId;
         if (postId) showResponseModal(postId);
         return;
     }
+    // Copy Response button
     const copyBtn = e.target.closest('.btn-copy-response');
     if (copyBtn) {
         const postId = copyBtn.dataset.postId;
@@ -527,12 +519,17 @@ async function generateAIResponse(postId) {
         });
         
         if (result.success) {
+            // Update the lead in our local array
             const lead = allLeads.find(l => l.id === postId);
             if (lead) {
                 lead.ai_response_generated = true;
                 lead.ai_response = result.ai_response;
             }
+            
+            // Re-render leads to show the response
+            
             renderLeads();
+            
             showToast('AI response generated successfully!', 'success');
         } else {
             showToast(result.message || 'Failed to generate response', 'error');
@@ -683,7 +680,7 @@ async function deleteSavedLead(postId) {
         
         if (result.success) {
             showToast('Lead deleted', 'success');
-            await viewSavedLeads();
+            await viewSavedLeads(); // Refresh
             await updateSavedCount();
         }
     } catch (error) {
@@ -701,6 +698,7 @@ function copyText(text, message) {
 
 window.deleteSavedLead = deleteSavedLead;
 window.copyText = copyText;
+
 
 // ===== NAVIGATION =====
 function goToStep(step) {
@@ -763,6 +761,7 @@ async function dismissPost(postId) {
         });
         
         if (result.success) {
+            // Remove from UI
             allLeads = allLeads.filter(l => l.id !== postId);
             renderLeads();
             updateStats();
@@ -784,6 +783,7 @@ async function loadUserProfile() {
         if (result.success) {
             userProfile = result.profile;
             
+            // Auto-fill company/niche if they exist
             if (userProfile.company_name) {
                 elements.companyNameInput.value = userProfile.company_name;
                 elements.companyNameInput.disabled = true;
@@ -816,6 +816,7 @@ async function saveProfile() {
         if (result.success) {
             userProfile = { company_name: companyName, business_niche: businessNiche };
             
+            // Update main form
             elements.companyNameInput.value = companyName;
             elements.businessNicheInput.value = businessNiche;
             elements.companyNameInput.disabled = !!companyName;
@@ -839,6 +840,7 @@ function openProfileModal() {
     document.getElementById('profileModal').classList.remove('hidden');
 }
 
+// Event listeners for profile modal
 // Event listeners for profile modal
 const userNameBtn = document.getElementById('userNameBtn');
 if (userNameBtn) {
@@ -873,6 +875,7 @@ if (profileModal) {
     });
 }
 
+
 // ===== EVENT LISTENERS =====
 
 // Step 1
@@ -906,11 +909,13 @@ elements.copyResponseBtn.addEventListener('click', () => {
     }
 });
 
+// Close modal on background click
 elements.aiResponseModal.addEventListener('click', (e) => {
     if (e.target === elements.aiResponseModal) {
         elements.aiResponseModal.classList.add('hidden');
     }
 });
+
 
 // Global
 elements.testConnectionBtn.addEventListener('click', testConnection);
@@ -944,7 +949,6 @@ elements.viewSavedBtn.addEventListener('click', viewSavedLeads);
 
 // Back to discovered leads
 elements.backToLeadsBtn.addEventListener('click', () => goToStep(3));
-
 // Expose functions globally for onclick handlers
 window.generateAIResponse = generateAIResponse;
 window.showResponseModal = showResponseModal;
@@ -953,4 +957,5 @@ window.dismissPost = dismissPost;
 
 // ===== INITIALIZATION =====
 console.log('🚀 AI Lead Discovery Platform initialized');
+
 console.log('📝 Enter your product/service description to begin');
