@@ -104,15 +104,19 @@ function escapeHtml(text) {
 
 // ===== SESSION GUARD =====
 // Immediately hide the page to prevent dashboard flash before auth check completes
-document.documentElement.style.visibility = 'hidden';
 
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
     if (!token) {
-        // No token at all — redirect immediately, no flash
         window.location.replace('/login');
         return;
     }
+
+    function reveal() {
+        clearTimeout(window._authRevealTimeout); // cancel the 4s safety timeout
+        document.documentElement.style.visibility = '';
+    }
+
     fetch('/api/auth/check-session', {
         headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -122,8 +126,7 @@ document.documentElement.style.visibility = 'hidden';
             localStorage.removeItem('session_token');
             window.location.replace('/login');
         } else {
-            // Auth confirmed — reveal the page
-            document.documentElement.style.visibility = '';
+            reveal();  // ← was just setting visibility directly
             const nameEl = document.getElementById('userName');
             if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
             updateSavedCount();
@@ -131,8 +134,7 @@ document.documentElement.style.visibility = 'hidden';
         }
     })
     .catch(() => {
-        // On network error, still reveal page so user isn't stuck on blank screen
-        document.documentElement.style.visibility = '';
+        reveal();  // ← was just setting visibility directly
         console.warn('Session check failed — server may be down.');
     });
 })();
