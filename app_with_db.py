@@ -1161,9 +1161,9 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Reddit Lead Discovery - Anatech Consultancy")
     print("=" * 60)
-    print("\nApp:      http://localhost:5000")
-    print("Login:    http://localhost:5000/login")
-    print("Signup:   http://localhost:5000/signup\n")
+    print("\nApp:    https://reddit-lead-discovery-production.up.railway.app/")
+    print("Login:    https://reddit-lead-discovery-production.up.railway.app/login")
+    print("Signup:   https://reddit-lead-discovery-production.up.railway.app/signup")
 
     try:
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
