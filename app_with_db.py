@@ -842,11 +842,24 @@ def generate_response():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
+    # Try server-side memory first
     post = next((p for p in state['discovered_posts'] if p['id'] == post_id), None)
-    if not post:
-        return jsonify({'success': False, 'message': 'Post not found'}), 404
 
-    ai_response = generate_ai_response(post, state['user_prompt'])
+    if not post:
+        # Frontend sends full lead object as fallback — handles server restarts
+        # wiping in-memory state without a 404 error
+        post_data = data.get('post_data')
+        if post_data and isinstance(post_data, dict) and post_data.get('id') == post_id:
+            post = post_data
+            # Re-register in server state so the session stays consistent
+            state['discovered_posts'].append(post)
+        else:
+            return jsonify({'success': False, 'message': 'Post not found — please refresh and try again'}), 404
+
+    # Use the user_prompt from state if available; fall back to what the frontend sent
+    user_context = state.get('user_prompt') or data.get('user_context', '')
+
+    ai_response = generate_ai_response(post, user_context)
     post['ai_response_generated'] = True
     post['ai_response']           = ai_response
 
@@ -856,7 +869,7 @@ def generate_response():
 @app.route('/api/save-lead', methods=['POST'])
 @require_auth
 def save_lead():
-    session =    request.user_session
+    session = request.user_session
     state   = get_user_state(session['user_id'])
 
     data    = request.json
@@ -865,9 +878,19 @@ def save_lead():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
+    # Try server-side memory first
     post = next((p for p in state['discovered_posts'] if p['id'] == post_id), None)
+
     if not post:
-        return jsonify({'success': False, 'message': 'Post not found'}), 404
+        # Frontend sends full lead object as fallback — handles server restarts
+        # wiping in-memory state without a 404 error
+        post_data = data.get('post_data')
+        if post_data and isinstance(post_data, dict) and post_data.get('id') == post_id:
+            post = post_data
+            # Re-register in server state so the session stays consistent
+            state['discovered_posts'].append(post)
+        else:
+            return jsonify({'success': False, 'message': 'Post not found — please refresh and try again'}), 404
 
     result = save_lead_to_db(post, user_id=session['user_id'])
     if result['success']:
@@ -887,10 +910,11 @@ def dismiss_post_route():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
+    # dismiss_post only needs the user_id + post_id — no in-memory lookup needed
     result = dismiss_post(session['user_id'], post_id)
-    
+
     if result['success']:
-        # Remove from current session's discovered posts
+        # Remove from in-memory state if present (best-effort; not required)
         state['discovered_posts'] = [
             p for p in state['discovered_posts'] if p['id'] != post_id
         ]
@@ -1161,9 +1185,9 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Reddit Lead Discovery - Anatech Consultancy")
     print("=" * 60)
-    print("\nApp:    https://reddit-lead-discovery-production.up.railway.app/")
-    print("Login:    https://reddit-lead-discovery-production.up.railway.app/login")
-    print("Signup:   https://reddit-lead-discovery-production.up.railway.app/signup")
+    print("\nApp:      http://localhost:5000")
+    print("Login:    http://localhost:5000/login")
+    print("Signup:   http://localhost:5000/signup\n")
 
     try:
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
