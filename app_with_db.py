@@ -842,21 +842,20 @@ def generate_response():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
-    # Try server-side memory first
+    # Try server-side memory first (fast path — works within the same session)
     post = next((p for p in state['discovered_posts'] if p['id'] == post_id), None)
 
     if not post:
-        # Frontend sends full lead object as fallback — handles server restarts
-        # wiping in-memory state without a 404 error
+        # Frontend always sends the full lead object as a fallback so the
+        # route works even after a Railway restart wipes in-memory state
         post_data = data.get('post_data')
         if post_data and isinstance(post_data, dict) and post_data.get('id') == post_id:
             post = post_data
-            # Re-register in server state so the session stays consistent
-            state['discovered_posts'].append(post)
+            state['discovered_posts'].append(post)   # re-register for this session
         else:
             return jsonify({'success': False, 'message': 'Post not found — please refresh and try again'}), 404
 
-    # Use the user_prompt from state if available; fall back to what the frontend sent
+    # Prefer server-stored prompt; fall back to what the frontend sent
     user_context = state.get('user_prompt') or data.get('user_context', '')
 
     ai_response = generate_ai_response(post, user_context)
@@ -878,17 +877,16 @@ def save_lead():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
-    # Try server-side memory first
+    # Try server-side memory first (fast path — works within the same session)
     post = next((p for p in state['discovered_posts'] if p['id'] == post_id), None)
 
     if not post:
-        # Frontend sends full lead object as fallback — handles server restarts
-        # wiping in-memory state without a 404 error
+        # Frontend always sends the full lead object as a fallback so the
+        # route works even after a Railway restart wipes in-memory state
         post_data = data.get('post_data')
         if post_data and isinstance(post_data, dict) and post_data.get('id') == post_id:
             post = post_data
-            # Re-register in server state so the session stays consistent
-            state['discovered_posts'].append(post)
+            state['discovered_posts'].append(post)   # re-register for this session
         else:
             return jsonify({'success': False, 'message': 'Post not found — please refresh and try again'}), 404
 
@@ -910,11 +908,11 @@ def dismiss_post_route():
     if not post_id:
         return jsonify({'success': False, 'message': 'No post ID'}), 400
 
-    # dismiss_post only needs the user_id + post_id — no in-memory lookup needed
+    # dismiss_post only needs user_id + post_id — no in-memory lookup required
     result = dismiss_post(session['user_id'], post_id)
 
     if result['success']:
-        # Remove from in-memory state if present (best-effort; not required)
+        # Best-effort removal from in-memory state (safe even if state was wiped)
         state['discovered_posts'] = [
             p for p in state['discovered_posts'] if p['id'] != post_id
         ]
