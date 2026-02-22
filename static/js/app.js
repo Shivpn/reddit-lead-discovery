@@ -103,40 +103,25 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
-// body starts with class "auth-loading" (visibility:hidden) set in HTML.
-// We reveal the page only after confirming a valid session.
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
-
-    // No token at all — redirect immediately before any paint
-    if (!token) {
-        window.location.replace('/login');
-        return;
-    }
-
-    // Token exists — verify it server-side, then reveal the page
+    if (!token) { window.location.href = '/login'; return; }
     fetch('/api/auth/check-session', {
         headers: { 'Authorization': `Bearer ${token}` }
     })
     .then(r => r.json())
     .then(data => {
-        if (!data.valid) {
-            localStorage.removeItem('session_token');
-            window.location.replace('/login');
-        } else {
-            // Auth confirmed — reveal the dashboard
-            document.body.classList.remove('auth-loading');
-            const nameEl = document.getElementById('userName');
-            if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
-            updateSavedCount();
-            loadUserProfile();
-        }
-    })
-    .catch(() => {
-        // Server unreachable — reveal page anyway so user isn't stuck on blank screen
-        document.body.classList.remove('auth-loading');
-        console.warn('Session check failed — server may be down.');
-    });
+    if (!data.valid) {
+        localStorage.removeItem('session_token');
+        window.location.href = '/login';
+    } else {
+        const nameEl = document.getElementById('userName');
+        if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
+        updateSavedCount();
+        loadUserProfile();  // ← NEW: Load profile
+    }
+})
+    .catch(() => console.warn('Session check failed — server may be down.'));
 })();
 
 // ===== LOGOUT =====
@@ -231,7 +216,7 @@ function renderSubreddits() {
             <div class="subreddit-name">r/${escapeHtml(sub.name)}</div>
             <div class="subreddit-meta">
                 <span class="relevance-badge">${sub.relevance_score}% Match</span>
-                <span>${escapeHtml(sub.estimated_size)}</span>
+                <span>📊 ${escapeHtml(sub.estimated_size)}</span>
             </div>
             <div class="subreddit-reason">${escapeHtml(sub.reason)}</div>
         </div>
@@ -349,7 +334,7 @@ function renderLeads() {
     if (filtered.length === 0) {
         elements.leadsList.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 60px 20px;">
-                <div style="font-size: 14px; font-weight: 600; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;">NO RESULTS</div>
+                <div style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;">📊</div>
                 <h3>No Leads Found</h3>
                 <p>Try lowering the minimum score filter</p>
             </div>
@@ -366,8 +351,8 @@ function renderLeads() {
                         <span>r/${escapeHtml(lead.subreddit)}</span>
                         <span>u/${escapeHtml(lead.author)}</span>
                         <span>↑ ${lead.score}</span>
-                        <span>${lead.num_comments} comments</span>
-                        <span>${formatTimestamp(lead.timestamp)}</span>
+                        <span>💬 ${lead.num_comments}</span>
+                        <span>🕐 ${formatTimestamp(lead.timestamp)}</span>
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
@@ -405,6 +390,7 @@ function renderLeads() {
             ${lead.ai_response_generated ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
+                    <span>🤖</span>
                     <span>AI-Generated Response</span>
                 </div>
                 <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
@@ -413,14 +399,14 @@ function renderLeads() {
             
             <div class="lead-actions">
             <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
-            View on Reddit
+            <span class="icon">🔗</span> View on Reddit
             </a>
             <button onclick="dismissPost('${lead.id}')" class="btn btn-secondary btn-sm">
-            Mark as Read
+            <span class="icon">👁‍🗨</span> Mark as Read
             </button>
            ${!lead.is_saved ? `
            <button onclick="saveLead('${lead.id}')" class="btn btn-success btn-sm">
-           Save Lead
+           <span class="icon">💾</span> Save Lead
            </button>
            ` : `
            <button class="btn btn-secondary btn-sm" disabled>
@@ -429,14 +415,14 @@ function renderLeads() {
             `}
                       ${!lead.ai_response_generated ? `
                 <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
-                    Generate AI Response
+                    <span class="icon">🤖</span> Generate AI Response
                 </button>
                 ` : `
                 <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
-                    View Full Response
+                    <span class="icon">👁</span> View Full Response
                 </button>
                 <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
-                    Copy Response
+                    <span class="icon">📋</span> Copy Response
                 </button>
                 `}
             </div>
@@ -448,9 +434,12 @@ async function saveLead(postId) {
     showLoading('Saving lead to database...');
     
     try {
+        // Always send full lead data so the server can reconstruct state
+        // after a restart — eliminates the 404 "Post not found" glitch
+        const lead = allLeads.find(l => l.id === postId);
         const result = await apiCall('/api/save-lead', {
             method: 'POST',
-            body: JSON.stringify({ post_id: postId })
+            body: JSON.stringify({ post_id: postId, post_data: lead || null })
         });
         
         if (result.success) {
@@ -488,9 +477,16 @@ async function generateAIResponse(postId) {
     showLoading('AI is crafting a personalized response...');
     
     try {
+        // Always send full lead data and user context so the server can
+        // reconstruct state after a restart — eliminates the 404 glitch
+        const lead = allLeads.find(l => l.id === postId);
         const result = await apiCall('/api/generate-response', {
             method: 'POST',
-            body: JSON.stringify({ post_id: postId })
+            body: JSON.stringify({
+                post_id: postId,
+                post_data: lead || null,
+                user_context: userPrompt
+            })
         });
         
         if (result.success) {
@@ -560,7 +556,7 @@ function renderSavedLeads(leads) {
     if (leads.length === 0) {
         elements.savedLeadsList.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 60px 20px;">
-                <div style="font-size: 14px; font-weight: 600; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;">SAVED LEADS</div>
+                <div style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;">💾</div>
                 <h3>No Saved Leads Yet</h3>
                 <p>Save leads from your search results to view them here</p>
             </div>
@@ -577,8 +573,8 @@ function renderSavedLeads(leads) {
                         <span>r/${escapeHtml(lead.subreddit)}</span>
                         <span>u/${escapeHtml(lead.author)}</span>
                         <span>↑ ${lead.score}</span>
-                        <span>${lead.num_comments} comments</span>
-                        <span>Saved ${formatTimestamp(lead.saved_at)}</span>
+                        <span>💬 ${lead.num_comments}</span>
+                        <span>💾 Saved ${formatTimestamp(lead.saved_at)}</span>
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
@@ -600,6 +596,7 @@ function renderSavedLeads(leads) {
             ${lead.ai_response ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
+                    <span>🤖</span>
                     <span>AI-Generated Response</span>
                 </div>
                 <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
@@ -608,15 +605,15 @@ function renderSavedLeads(leads) {
             
             <div class="lead-actions">
                 <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
-                    View on Reddit
+                    <span class="icon">🔗</span> View on Reddit
                 </a>
                 ${lead.ai_response ? `
                 <button onclick="copyText('${escapeHtml(lead.ai_response).replace(/'/g, "\\'")}', 'Response copied!')" class="btn btn-secondary btn-sm">
-                    Copy Response
+                    <span class="icon">📋</span> Copy Response
                 </button>
                 ` : ''}
                 <button onclick="deleteSavedLead('${lead.reddit_post_id}')" class="btn btn-danger btn-sm">
-                    Delete
+                    <span class="icon">🗑</span> Delete
                 </button>
             </div>
         </div>
@@ -729,6 +726,7 @@ async function dismissPost(postId) {
     showLoading('Dismissing post...');
     
     try {
+        // Dismiss only needs post_id — no post_data required
         const result = await apiCall('/api/dismiss-post', {
             method: 'POST',
             body: JSON.stringify({ post_id: postId })
@@ -930,6 +928,6 @@ window.copyResponse = copyResponse;
 window.dismissPost = dismissPost;
 
 // ===== INITIALIZATION =====
-console.log('AI Lead Discovery Platform initialized');
+console.log('🚀 AI Lead Discovery Platform initialized');
 
-console.log('Enter your product/service description to begin');
+console.log('📝 Enter your product/service description to begin');
