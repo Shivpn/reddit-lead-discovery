@@ -818,6 +818,11 @@ body {
     display: none !important;
 }
 
+/* Prevent dashboard flash before auth check completes */
+body.auth-loading {
+    visibility: hidden;
+}
+
 /* ===== MANUAL SUBREDDIT ENTRY ===== */
 .manual-entry-section {
     background: #f8fafc;
@@ -917,4 +922,3 @@ body {
     }
 
 }
-
