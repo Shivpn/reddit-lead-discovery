@@ -818,7 +818,8 @@ body {
     display: none !important;
 }
 
-/* Prevent dashboard flash before auth check completes */
+/* Prevent dashboard flash before auth check completes.
+   Removed by JS only after session is confirmed valid. */
 body.auth-loading {
     visibility: hidden;
 }
