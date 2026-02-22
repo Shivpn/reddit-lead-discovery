@@ -61,7 +61,6 @@ const elements = {
 };
 
 // ===== UTILITY FUNCTIONS =====
-
 function showLoading(text = 'Processing...') {
     elements.loadingText.textContent = text;
     elements.loadingOverlay.classList.remove('hidden');
@@ -104,15 +103,18 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
-document.documentElement.style.visibility = 'hidden';
-
+// body starts with class "auth-loading" (visibility:hidden) set in HTML.
+// We reveal the page only after confirming a valid session.
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
+
+    // No token at all — redirect immediately before any paint
     if (!token) {
-        // No token at all — redirect immediately, no flash
         window.location.replace('/login');
         return;
     }
+
+    // Token exists — verify it server-side, then reveal the page
     fetch('/api/auth/check-session', {
         headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -122,8 +124,8 @@ document.documentElement.style.visibility = 'hidden';
             localStorage.removeItem('session_token');
             window.location.replace('/login');
         } else {
-            // Auth confirmed — reveal the page
-            document.documentElement.style.visibility = '';
+            // Auth confirmed — reveal the dashboard
+            document.body.classList.remove('auth-loading');
             const nameEl = document.getElementById('userName');
             if (nameEl) nameEl.textContent = data.user?.full_name || 'User';
             updateSavedCount();
@@ -131,8 +133,8 @@ document.documentElement.style.visibility = 'hidden';
         }
     })
     .catch(() => {
-        // On network error, still reveal page so user isn't stuck on blank screen
-        document.documentElement.style.visibility = '';
+        // Server unreachable — reveal page anyway so user isn't stuck on blank screen
+        document.body.classList.remove('auth-loading');
         console.warn('Session check failed — server may be down.');
     });
 })();
@@ -229,7 +231,7 @@ function renderSubreddits() {
             <div class="subreddit-name">r/${escapeHtml(sub.name)}</div>
             <div class="subreddit-meta">
                 <span class="relevance-badge">${sub.relevance_score}% Match</span>
-                <span>📊 ${escapeHtml(sub.estimated_size)}</span>
+                <span>${escapeHtml(sub.estimated_size)}</span>
             </div>
             <div class="subreddit-reason">${escapeHtml(sub.reason)}</div>
         </div>
@@ -347,7 +349,7 @@ function renderLeads() {
     if (filtered.length === 0) {
         elements.leadsList.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 60px 20px;">
-                <div style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;">📊</div>
+                <div style="font-size: 14px; font-weight: 600; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;">NO RESULTS</div>
                 <h3>No Leads Found</h3>
                 <p>Try lowering the minimum score filter</p>
             </div>
@@ -364,8 +366,8 @@ function renderLeads() {
                         <span>r/${escapeHtml(lead.subreddit)}</span>
                         <span>u/${escapeHtml(lead.author)}</span>
                         <span>↑ ${lead.score}</span>
-                        <span>💬 ${lead.num_comments}</span>
-                        <span>🕐 ${formatTimestamp(lead.timestamp)}</span>
+                        <span>${lead.num_comments} comments</span>
+                        <span>${formatTimestamp(lead.timestamp)}</span>
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
@@ -403,7 +405,6 @@ function renderLeads() {
             ${lead.ai_response_generated ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
-                    <span>🤖</span>
                     <span>AI-Generated Response</span>
                 </div>
                 <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
@@ -412,14 +413,14 @@ function renderLeads() {
             
             <div class="lead-actions">
             <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
-            <span class="icon">🔗</span> View on Reddit
+            View on Reddit
             </a>
             <button onclick="dismissPost('${lead.id}')" class="btn btn-secondary btn-sm">
-            <span class="icon">👁‍🗨</span> Mark as Read
+            Mark as Read
             </button>
            ${!lead.is_saved ? `
            <button onclick="saveLead('${lead.id}')" class="btn btn-success btn-sm">
-           <span class="icon">💾</span> Save Lead
+           Save Lead
            </button>
            ` : `
            <button class="btn btn-secondary btn-sm" disabled>
@@ -427,47 +428,21 @@ function renderLeads() {
            </button>
             `}
                       ${!lead.ai_response_generated ? `
-                <button class="btn btn-success btn-sm btn-generate-ai" data-post-id="${escapeHtml(String(lead.id))}">
-                    <span class="icon">🤖</span> Generate AI Response
+                <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
+                    Generate AI Response
                 </button>
                 ` : `
-                <button class="btn btn-secondary btn-sm btn-view-response" data-post-id="${escapeHtml(String(lead.id))}">
-                    <span class="icon">👁</span> View Full Response
+                <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
+                    View Full Response
                 </button>
-                <button class="btn btn-secondary btn-sm btn-copy-response" data-post-id="${escapeHtml(String(lead.id))}">
-                    <span class="icon">📋</span> Copy Response
+                <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
+                    Copy Response
                 </button>
                 `}
             </div>
         </div>
     `).join('');
 }
-// ===== EVENT DELEGATION FOR LEAD BUTTONS =====
-// Using event delegation prevents inline onclick issues with special characters in post IDs
-document.addEventListener('click', function(e) {
-    // Generate AI Response button
-    const generateBtn = e.target.closest('.btn-generate-ai');
-    if (generateBtn) {
-        const postId = generateBtn.dataset.postId;
-        if (postId) generateAIResponse(postId);
-        return;
-    }
-    // View Response button
-    const viewBtn = e.target.closest('.btn-view-response');
-    if (viewBtn) {
-        const postId = viewBtn.dataset.postId;
-        if (postId) showResponseModal(postId);
-        return;
-    }
-    // Copy Response button
-    const copyBtn = e.target.closest('.btn-copy-response');
-    if (copyBtn) {
-        const postId = copyBtn.dataset.postId;
-        if (postId) copyResponse(postId);
-        return;
-    }
-});
-
 // ===== SAVE LEAD TO DATABASE =====
 async function saveLead(postId) {
     showLoading('Saving lead to database...');
@@ -585,7 +560,7 @@ function renderSavedLeads(leads) {
     if (leads.length === 0) {
         elements.savedLeadsList.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 60px 20px;">
-                <div style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;">💾</div>
+                <div style="font-size: 14px; font-weight: 600; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;">SAVED LEADS</div>
                 <h3>No Saved Leads Yet</h3>
                 <p>Save leads from your search results to view them here</p>
             </div>
@@ -602,8 +577,8 @@ function renderSavedLeads(leads) {
                         <span>r/${escapeHtml(lead.subreddit)}</span>
                         <span>u/${escapeHtml(lead.author)}</span>
                         <span>↑ ${lead.score}</span>
-                        <span>💬 ${lead.num_comments}</span>
-                        <span>💾 Saved ${formatTimestamp(lead.saved_at)}</span>
+                        <span>${lead.num_comments} comments</span>
+                        <span>Saved ${formatTimestamp(lead.saved_at)}</span>
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
@@ -625,7 +600,6 @@ function renderSavedLeads(leads) {
             ${lead.ai_response ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
-                    <span>🤖</span>
                     <span>AI-Generated Response</span>
                 </div>
                 <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
@@ -634,15 +608,15 @@ function renderSavedLeads(leads) {
             
             <div class="lead-actions">
                 <a href="${lead.url}" target="_blank" class="btn btn-primary btn-sm">
-                    <span class="icon">🔗</span> View on Reddit
+                    View on Reddit
                 </a>
                 ${lead.ai_response ? `
                 <button onclick="copyText('${escapeHtml(lead.ai_response).replace(/'/g, "\\'")}', 'Response copied!')" class="btn btn-secondary btn-sm">
-                    <span class="icon">📋</span> Copy Response
+                    Copy Response
                 </button>
                 ` : ''}
                 <button onclick="deleteSavedLead('${lead.reddit_post_id}')" class="btn btn-danger btn-sm">
-                    <span class="icon">🗑</span> Delete
+                    Delete
                 </button>
             </div>
         </div>
@@ -956,6 +930,6 @@ window.copyResponse = copyResponse;
 window.dismissPost = dismissPost;
 
 // ===== INITIALIZATION =====
-console.log('🚀 AI Lead Discovery Platform initialized');
+console.log('AI Lead Discovery Platform initialized');
 
-console.log('📝 Enter your product/service description to begin');
+console.log('Enter your product/service description to begin');
