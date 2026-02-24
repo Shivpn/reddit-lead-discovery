@@ -103,9 +103,7 @@ function escapeHtml(text) {
 }
 
 // ===== SESSION GUARD =====
-// The <body> starts with class "auth-loading" (visibility:hidden).
-// We remove that class ONLY after confirming a valid session so the
-// dashboard never flashes before authentication is complete.
+
 (function checkAuth() {
     const token = localStorage.getItem('session_token');
 
@@ -260,8 +258,9 @@ function toggleSubreddit(card) {
 }
 
 function updateSelectionCount() {
-    elements.selectedCount.textContent = selectedSubreddits.length;
-    elements.fetchLeadsBtn.disabled = selectedSubreddits.length === 0;
+    const total = selectedSubreddits.length + manualSubreddits.length;
+    elements.selectedCount.textContent = total;
+    elements.fetchLeadsBtn.disabled = total === 0;
 }
 // ===== MANUAL SUBREDDIT ENTRY =====
 function renderManualSubreddits() {
@@ -372,7 +371,7 @@ function renderLeads() {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}/100
+                    ${lead.relevancy_score}%
                 </div>
             </div>
             
@@ -406,10 +405,23 @@ function renderLeads() {
             ${lead.ai_response_generated ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
-                    <span>AI-Generated Response</span>
+                    <span>AI-Generated Responses</span>
                 </div>
-                <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
-            </div>  
+                <div class="ai-response-subsection">
+                    <div class="ai-response-label">
+                        <strong>DM Response</strong>
+                        <button onclick="copyResponseById('${lead.id}', 'dm')" class="btn btn-secondary btn-xs">Copy DM</button>
+                    </div>
+                    <div class="ai-response-text-content">${escapeHtml(lead.ai_dm_response || '')}</div>
+                </div>
+                <div class="ai-response-subsection">
+                    <div class="ai-response-label">
+                        <strong>Comment Response</strong>
+                        <button onclick="copyResponseById('${lead.id}', 'comment')" class="btn btn-secondary btn-xs">Copy Comment</button>
+                    </div>
+                    <div class="ai-response-text-content">${escapeHtml(lead.ai_comment_response || '')}</div>
+                </div>
+            </div>
             ` : ''}
             
             <div class="lead-actions">
@@ -432,14 +444,7 @@ function renderLeads() {
                 <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
                     Generate AI Response
                 </button>
-                ` : `
-                <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
-                    View Full Response
-                </button>
-                <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
-                    Copy Response
-                </button>
-                `}
+                ` : ``}
             </div>
         </div>
     `).join('');
@@ -507,6 +512,8 @@ async function generateAIResponse(postId) {
             if (lead) {
                 lead.ai_response_generated = true;
                 lead.ai_response = result.ai_response;
+                lead.ai_dm_response = result.ai_dm_response || result.ai_response;
+                lead.ai_comment_response = result.ai_comment_response || result.ai_response;
             }
             renderLeads();
             showToast('AI response generated successfully!', 'success');
@@ -539,6 +546,20 @@ function copyResponse(postId) {
         showToast('Failed to copy response', 'error');
     });
 }
+
+function copyResponseById(postId, type) {
+    const lead = allLeads.find(l => l.id === postId);
+    if (!lead) return;
+    const text = type === 'dm' ? lead.ai_dm_response : lead.ai_comment_response;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`${type === 'dm' ? 'DM' : 'Comment'} response copied!`, 'success');
+    }).catch(() => {
+        showToast('Failed to copy response', 'error');
+    });
+}
+
+window.copyResponseById = copyResponseById;
 
 // ===== VIEW SAVED LEADS =====
 async function viewSavedLeads() {
@@ -586,7 +607,7 @@ function renderSavedLeads(leads) {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}/100
+                    ${lead.relevancy_score}%
                 </div>
             </div>
             
