@@ -243,8 +243,8 @@ def analyze_post_with_ai(post_data, user_context):
 
 CRITICAL RULES:
 1. ONLY score high (70+) if the post shows ACTIVE HELP-SEEKING or PROBLEM-SOLVING intent
-2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed"
-3. REJECT posts that are just: news, discussions, success stories, announcements, general chat
+2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed", discussions {user_context}
+3. REJECT posts that are just: news, success stories, announcements, general chat
 4. The post must show the person WANTS a solution or service that matches the business above
 5. Keyword matches alone are NOT enough - intent is everything
 
@@ -257,7 +257,7 @@ Content: {post_data['content'][:1000]}
 
 Respond ONLY with valid JSON:
 {{
-  "relevancy_score": <0-100>,
+  "relevancy_score":  "<0-100>%",
   "is_help_seeking": <true/false>,
   "help_seeking_signals": ["signal1", "signal2"],
   "reasoning": "<2-3 sentences>",
