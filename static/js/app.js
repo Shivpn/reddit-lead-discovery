@@ -258,9 +258,8 @@ function toggleSubreddit(card) {
 }
 
 function updateSelectionCount() {
-    const total = selectedSubreddits.length + manualSubreddits.length;
-    elements.selectedCount.textContent = total;
-    elements.fetchLeadsBtn.disabled = total === 0;
+    elements.selectedCount.textContent = selectedSubreddits.length;
+    elements.fetchLeadsBtn.disabled = selectedSubreddits.length === 0;
 }
 // ===== MANUAL SUBREDDIT ENTRY =====
 function renderManualSubreddits() {
@@ -282,17 +281,77 @@ window.removeManualSub = removeManualSub;
 
 // ===== STEP 2: FETCH LEADS =====
 async function fetchLeads() {
-    const allSubreddits = [...selectedSubreddits, ...manualSubreddits]; // COMBINE BOTH
+    const allSubreddits = [...selectedSubreddits, ...manualSubreddits];
     
-    if (allSubreddits.length === 0) { // CHECK COMBINED
+    if (allSubreddits.length === 0) {
         showToast('Please select at least one subreddit', 'error');
         return;
     }
-    
-    showLoading(`Fetching posts from ${allSubreddits.length} subreddit(s)...`); // USE COMBINED
-    
-    showLoading(`Fetching posts from ${selectedSubreddits.length} subreddit(s)...`);
-    
+
+    // ── Validate manually entered subreddits against the user prompt ──────
+    if (manualSubreddits.length > 0) {
+        showLoading('Checking manually entered subreddits for relevance...');
+        try {
+            const company = elements.companyNameInput?.value.trim() || '';
+            const niche   = elements.businessNicheInput?.value.trim() || '';
+            const valResult = await apiCall('/api/validate-subreddits', {
+                method: 'POST',
+                body: JSON.stringify({
+                    manual_subreddits: manualSubreddits,
+                    prompt: userPrompt,
+                    company,
+                    niche
+                })
+            });
+
+            if (valResult && valResult.invalid && valResult.invalid.length > 0) {
+                const rejectedNames = valResult.invalid.map(r => `r/${r.name}`).join(', ');
+                const validManual   = valResult.valid || [];
+
+                if (validManual.length === 0 && selectedSubreddits.length === 0) {
+                    // Nothing left to search
+                    hideLoading();
+                    showToast(
+                        `The subreddit(s) you entered (${rejectedNames}) do not match the prompt you described. Please choose more relevant subreddits.`,
+                        'error'
+                    );
+                    return;
+                }
+
+                // Some are invalid — warn but continue with valid ones
+                const proceed = confirm(
+                    `The following subreddit(s) do not match your business description and will be skipped:\n\n${rejectedNames}\n\nClick OK to continue with the remaining subreddits, or Cancel to go back and edit.`
+                );
+                if (!proceed) {
+                    hideLoading();
+                    return;
+                }
+
+                // Replace manualSubreddits with only the valid ones for this fetch
+                const subredditsToFetch = [...selectedSubreddits, ...validManual];
+                if (subredditsToFetch.length === 0) {
+                    hideLoading();
+                    showToast('No valid subreddits remain. Please add relevant subreddits.', 'error');
+                    return;
+                }
+
+                hideLoading();
+                await _doFetchLeads(subredditsToFetch);
+                return;
+            }
+        } catch (err) {
+            // Validation failed — proceed anyway rather than blocking the user
+            console.warn('Subreddit validation error:', err);
+            hideLoading();
+        }
+    }
+
+    await _doFetchLeads(allSubreddits);
+}
+
+async function _doFetchLeads(subredditsToFetch) {
+    showLoading(`Fetching posts from ${subredditsToFetch.length} subreddit(s)...`);
+
     try {
         // Add delay to show loading state
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -305,7 +364,7 @@ async function fetchLeads() {
         const result = await apiCall('/api/fetch-leads', {
             method: 'POST',
             body: JSON.stringify({
-                subreddits: allSubreddits,
+                subreddits: subredditsToFetch,
                 prompt: userPrompt,
                 company,
                 niche,
@@ -371,7 +430,7 @@ function renderLeads() {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}%
+                    ${lead.relevancy_score}/100
                 </div>
             </div>
             
@@ -405,23 +464,10 @@ function renderLeads() {
             ${lead.ai_response_generated ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
-                    <span>AI-Generated Responses</span>
+                    <span>AI-Generated Response</span>
                 </div>
-                <div class="ai-response-subsection">
-                    <div class="ai-response-label">
-                        <strong>DM Response</strong>
-                        <button onclick="copyResponseById('${lead.id}', 'dm')" class="btn btn-secondary btn-xs">Copy DM</button>
-                    </div>
-                    <div class="ai-response-text-content">${escapeHtml(lead.ai_dm_response || '')}</div>
-                </div>
-                <div class="ai-response-subsection">
-                    <div class="ai-response-label">
-                        <strong>Comment Response</strong>
-                        <button onclick="copyResponseById('${lead.id}', 'comment')" class="btn btn-secondary btn-xs">Copy Comment</button>
-                    </div>
-                    <div class="ai-response-text-content">${escapeHtml(lead.ai_comment_response || '')}</div>
-                </div>
-            </div>
+                <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
+            </div>  
             ` : ''}
             
             <div class="lead-actions">
@@ -444,7 +490,14 @@ function renderLeads() {
                 <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
                     Generate AI Response
                 </button>
-                ` : ``}
+                ` : `
+                <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
+                    View Full Response
+                </button>
+                <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
+                    Copy Response
+                </button>
+                `}
             </div>
         </div>
     `).join('');
@@ -512,8 +565,6 @@ async function generateAIResponse(postId) {
             if (lead) {
                 lead.ai_response_generated = true;
                 lead.ai_response = result.ai_response;
-                lead.ai_dm_response = result.ai_dm_response || result.ai_response;
-                lead.ai_comment_response = result.ai_comment_response || result.ai_response;
             }
             renderLeads();
             showToast('AI response generated successfully!', 'success');
@@ -546,20 +597,6 @@ function copyResponse(postId) {
         showToast('Failed to copy response', 'error');
     });
 }
-
-function copyResponseById(postId, type) {
-    const lead = allLeads.find(l => l.id === postId);
-    if (!lead) return;
-    const text = type === 'dm' ? lead.ai_dm_response : lead.ai_comment_response;
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        showToast(`${type === 'dm' ? 'DM' : 'Comment'} response copied!`, 'success');
-    }).catch(() => {
-        showToast('Failed to copy response', 'error');
-    });
-}
-
-window.copyResponseById = copyResponseById;
 
 // ===== VIEW SAVED LEADS =====
 async function viewSavedLeads() {
@@ -607,7 +644,7 @@ function renderSavedLeads(leads) {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}%
+                    ${lead.relevancy_score}/100
                 </div>
             </div>
             
