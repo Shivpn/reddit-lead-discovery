@@ -7,8 +7,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import praw
-from groq import Groq
 import json
+from llm_client import call_llm, LLM_PROVIDER
 
 # Import database functions
 from database import (
@@ -43,8 +43,7 @@ reddit = praw.Reddit(
     check_for_async=False
 )
 
-# Initialize Groq AI
-groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+# LLM client is initialised in llm_client.py (set LLM_PROVIDER in .env)
 
 # =====================================================
 # PER-USER SESSION STATE  (replaces bare globals)
@@ -109,8 +108,8 @@ def rate_limit_check(user_id: str = '__global__'):
 # =====================================================
 api_stats = {
     'reddit_calls': 0,
-    'groq_calls':   0,
-    'groq_tokens': {
+    'llm_calls':    0,
+    'llm_tokens': {
         'total': 0,
         'subreddit_discovery': {'prompt': 0, 'completion': 0, 'calls': 0},
         'post_analysis':       {'prompt': 0, 'completion': 0, 'calls': 0},
@@ -124,23 +123,23 @@ def _inc_reddit():
     with _stats_lock:
         api_stats['reddit_calls'] += 1
 
-def _inc_groq(category: str, pt: int, ct: int):
+def _inc_llm(category: str, pt: int, ct: int):
     with _stats_lock:
-        api_stats['groq_calls']                        += 1
-        api_stats['groq_tokens']['total']              += pt + ct
-        api_stats['groq_tokens'][category]['prompt']   += pt
-        api_stats['groq_tokens'][category]['completion']+= ct
-        api_stats['groq_tokens'][category]['calls']    += 1
+        api_stats['llm_calls']                        += 1
+        api_stats['llm_tokens']['total']              += pt + ct
+        api_stats['llm_tokens'][category]['prompt']   += pt
+        api_stats['llm_tokens'][category]['completion']+= ct
+        api_stats['llm_tokens'][category]['calls']    += 1
 
 def print_api_stats():
-    t = api_stats['groq_tokens']
+    t = api_stats['llm_tokens']
     print("\n" + "="*60)
     print("API USAGE SUMMARY")
     print("="*60)
     print(f"  Reddit API calls  : {api_stats['reddit_calls']}")
-    print(f"  Groq API calls    : {api_stats['groq_calls']}")
-    print(f"  Groq total tokens : {t['total']}")
-    print("  Groq token breakdown:")
+    print(f"  LLM API calls     : {api_stats['llm_calls']} ({LLM_PROVIDER.upper()})")
+    print(f"  LLM total tokens  : {t['total']}")
+    print("  LLM token breakdown:")
     for key, label in [
         ('subreddit_discovery', 'Subreddit discovery'),
         ('post_analysis',       'Post analysis      '),
@@ -157,33 +156,22 @@ def print_api_stats():
 
 
 # =====================================================
-# GROQ HELPER
+# LLM HELPER  — thin wrapper that tracks stats
 # =====================================================
 
 def call_groq_ai(system_prompt, user_message, temperature=0.3,
                  max_tokens=500, token_category='test_connection'):
-    """Call Groq AI. Thread-safe stats update via _inc_groq()."""
-    try:
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_message}
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        usage = response.usage
-        if usage:
-            pt = usage.prompt_tokens    or 0
-            ct = usage.completion_tokens or 0
-            _inc_groq(token_category, pt, ct)
-            print(f"  [Groq/{token_category}] +{pt+ct} tokens "
-                  f"(prompt:{pt} completion:{ct})")
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Groq AI Error: {str(e)}")
-        return None
+    """
+    Backward-compatible wrapper around call_llm().
+    All internal callers use this name — no other changes needed.
+    Provider is controlled by LLM_PROVIDER in .env.
+    """
+    text, pt, ct = call_llm(system_prompt, user_message, temperature, max_tokens)
+    if text is not None:
+        _inc_llm(token_category, pt, ct)
+        print(f"  [LLM/{LLM_PROVIDER}/{token_category}] +{pt+ct} tokens "
+              f"(prompt:{pt} completion:{ct})")
+    return text
 
 
 # =====================================================
