@@ -258,8 +258,9 @@ function toggleSubreddit(card) {
 }
 
 function updateSelectionCount() {
-    elements.selectedCount.textContent = selectedSubreddits.length;
-    elements.fetchLeadsBtn.disabled = selectedSubreddits.length === 0;
+    const total = selectedSubreddits.length + manualSubreddits.length;
+    elements.selectedCount.textContent = total;
+    elements.fetchLeadsBtn.disabled = total === 0;
 }
 // ===== MANUAL SUBREDDIT ENTRY =====
 function renderManualSubreddits() {
@@ -995,3 +996,4 @@ window.dismissPost = dismissPost;
 console.log('AI Lead Discovery Platform initialized');
 
 console.log('Enter your product/service description to begin');
+
