@@ -236,22 +236,28 @@ Respond ONLY with valid JSON:
 def analyze_post_with_ai(post_data, user_context):
     """Analyse one post. Can be called from any thread safely."""
     result = call_groq_ai(
-        system_prompt=f"""You are a STRICT lead qualifier analyzing Reddit posts.
+        system_prompt=f"""You are a STRICT lead qualifier. Your sole job is to measure how well a Reddit post matches the business context below.
 
+BUSINESS CONTEXT:
 {user_context}
 
-CRITICAL RULES:
-1. ONLY score high (70+) if the post shows ACTIVE HELP-SEEKING or PROBLEM-SOLVING intent
-2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed"
-3. REJECT posts that are just: news, discussions, success stories, announcements, general chat
-4. The post must show the person WANTS a solution or service that matches the business above
-5. Keyword matches alone are NOT enough - intent is everything
+SCORING RULES — read carefully:
+1. relevancy_score (0-100) measures ONLY how closely the post content matches the business context above.
+   - High (70-100): The post is directly about the topic, problem, or domain the business serves. The person could realistically benefit from this business.
+   - Medium (40-69): The post touches on related themes but the connection to the business is indirect or partial.
+   - Low (0-39): The post is about something unrelated to the business context, regardless of how much the person needs help.
 
-Be VERY strict. When in doubt, score lower.""",
-        user_message=f"""Analyze this post - is this person ACTIVELY SEEKING HELP?
+2. is_help_seeking: true if the person is seeking advice, solutions, recommendations, or expressing a problem they want to solve. This includes questions, discussions where someone is figuring something out, or requests for opinions on a decision. Do NOT limit this to only explicit "help me" phrases — thoughtful discussions can also be help-seeking.
+   Set is_help_seeking: false ONLY for pure news posts, press releases, announcements, or self-promotion with no question or problem expressed.
+
+3. CRITICAL: The subreddit name must NOT influence relevancy_score. Score purely on whether the post content matches the business context.
+
+4. A post can be a discussion AND be help-seeking — do not penalise discussion posts if they contain a real problem or question relevant to the business.
+
+When in doubt, score lower on relevancy_score but be fair about is_help_seeking.""",
+        user_message=f"""Score this Reddit post against the business context provided.
 
 Title: {post_data['title']}
-Subreddit: r/{post_data['subreddit']}
 Content: {post_data['content'][:1000]}
 
 Respond ONLY with valid JSON:
@@ -259,7 +265,7 @@ Respond ONLY with valid JSON:
   "relevancy_score": <0-100>,
   "is_help_seeking": <true/false>,
   "help_seeking_signals": ["signal1", "signal2"],
-  "reasoning": "<2-3 sentences>",
+  "reasoning": "<2-3 sentences explaining the relevancy score and why the post does or does not match the business context>",
   "intent_strength": "<low/medium/high>",
   "potential_value": "<low/medium/high>",
   "key_pain_points": ["pain1", "pain2"]
@@ -298,33 +304,39 @@ def analyze_batch_of_posts(posts_batch: list, user_context: str) -> list:
     if len(posts_batch) > 6:
         raise ValueError("Batch size cannot exceed 6 posts")
     
-    # Build batch prompt with all posts
+    # Build batch prompt with all posts — subreddit name intentionally omitted
     posts_text = ""
     for idx, post in enumerate(posts_batch, 1):
         posts_text += f"""
 POST {idx}:
 Title: {post['title']}
-Subreddit: r/{post['subreddit']}
 Content: {post['content'][:800]}
 ---
 """
     
-    system_prompt = f"""You are a STRICT lead qualifier analyzing Reddit posts.
+    system_prompt = f"""You are a STRICT lead qualifier. Your sole job is to measure how well each Reddit post matches the business context below.
 
+BUSINESS CONTEXT:
 {user_context}
 
-CRITICAL RULES:
-1. ONLY score high (70+) if the post shows ACTIVE HELP-SEEKING or PROBLEM-SOLVING intent
-2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed"
-3. REJECT posts that are just: news, discussions, success stories, announcements, general chat
-4. The post must show the person WANTS a solution or service that matches the business above
-5. Keyword matches alone are NOT enough - intent is everything
+SCORING RULES — read carefully:
+1. relevancy_score (0-100) measures ONLY how closely the post content matches the business context above.
+   - High (70-100): The post is directly about the topic, problem, or domain the business serves. The person could realistically benefit from this business.
+   - Medium (40-69): The post touches on related themes but the connection to the business is indirect or partial.
+   - Low (0-39): The post is about something unrelated to the business context, regardless of how much the person needs help.
 
-Be VERY strict. When in doubt, score lower.
+2. is_help_seeking: true if the person is seeking advice, solutions, recommendations, or expressing a problem they want to solve. This includes questions, discussions where someone is figuring something out, or requests for opinions on a decision. Do NOT limit this to only explicit "help me" phrases — thoughtful discussions can also be help-seeking.
+   Set is_help_seeking: false ONLY for pure news posts, press releases, announcements, or self-promotion with no question or problem expressed.
 
-You will analyze {len(posts_batch)} posts below. Respond with a JSON array containing one analysis object per post, IN THE SAME ORDER."""
+3. CRITICAL: The subreddit name must NOT influence relevancy_score. Score purely on whether the post content matches the business context.
 
-    user_message = f"""Analyze these {len(posts_batch)} posts - is each person ACTIVELY SEEKING HELP?
+4. A post can be a discussion AND be help-seeking — do not penalise discussion posts if they contain a real problem or question relevant to the business.
+
+When in doubt, score lower on relevancy_score but be fair about is_help_seeking.
+
+You will analyze {len(posts_batch)} posts below. Respond with a JSON array in the SAME ORDER as the posts."""
+
+    user_message = f"""Score each post against the business context provided.
 
 {posts_text}
 
@@ -335,7 +347,7 @@ Respond ONLY with valid JSON array (one object per post, in order):
     "relevancy_score": <0-100>,
     "is_help_seeking": <true/false>,
     "help_seeking_signals": ["signal1", "signal2"],
-    "reasoning": "<2-3 sentences>",
+    "reasoning": "<2-3 sentences explaining the relevancy score and why the post does or does not match the business context>",
     "intent_strength": "<low/medium/high>",
     "potential_value": "<low/medium/high>",
     "key_pain_points": ["pain1", "pain2"]
@@ -397,41 +409,18 @@ Respond ONLY with valid JSON array (one object per post, in order):
 # =====================================================
 
 def generate_ai_response(post_data, user_context):
-    dm_result = call_groq_ai(
-        system_prompt=f"""You are crafting a genuine, helpful direct message to a Reddit user who posted about a problem you can help with.
+    result = call_groq_ai(
+        system_prompt=f"""You are a knowledgeable Redditor replying to a post.
 
 {user_context}
 
 Rules:
-- Write 3-5 sentences as a direct message (DM)
-- Directly address the person's specific pain point from their post
-- Provide one concrete, actionable insight or offer
-- Mention the company/service naturally as a real recommendation, not an ad
-- Sound like a real person reaching out, not a marketer
-- Do not use em-dashes in your response""",
-        user_message=f"""Write a personalized DM response to this Reddit post:
-
-Title: {post_data['title']}
-Content: {post_data['content'][:1200]}
-Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
-        temperature=0.7,
-        max_tokens=300,
-        token_category='response_generation'
-    )
-
-    comment_result = call_groq_ai(
-        system_prompt=f"""You are a knowledgeable Redditor writing a public reply to a post.
-
-{user_context}
-
-Rules:
-- Write 3-5 sentences as a public comment reply
+- Keep the reply SHORT (3-5 sentences max)
 - Directly address the person's specific pain point
 - Provide one concrete, actionable insight
-- Mention the company/service in a genuinely natural fit that looks like a real recommendation, not an ad
-- Sound like a real person, not a marketer
-- Do not use em-dashes in your response""",
-        user_message=f"""Write a concise Reddit comment reply to this post:
+- Mention the company/service and niche in a genuinely natural fit that looks like a real recommendation, not an ad
+- Sound like a real person, not a marketer""",
+        user_message=f"""Write a concise Reddit reply to this post:
 
 Title: {post_data['title']}
 Content: {post_data['content'][:1200]}
@@ -440,10 +429,7 @@ Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
         max_tokens=300,
         token_category='response_generation'
     )
-
-    dm = (dm_result or "Unable to generate DM response.").replace('\u2014', '-').replace('\u2013', '-')
-    comment = (comment_result or "Unable to generate comment response.").replace('\u2014', '-').replace('\u2013', '-')
-    return dm, comment
+    return result if result else "Unable to generate response."
 
 
 # =====================================================
@@ -648,6 +634,70 @@ def process_and_analyze_posts_parallel(posts: list, user_context: str) -> list:
     return analyzed
 
 
+def validate_manual_subreddits(subreddit_names: list, user_context: str) -> dict:
+    """
+    Uses AI to check whether manually entered subreddits are relevant to the user's business context.
+    Returns a dict with 'valid' (list of ok names) and 'invalid' (list of rejected names with reasons).
+    """
+    if not subreddit_names:
+        return {'valid': [], 'invalid': []}
+
+    subs_text = "\n".join(f"- r/{name}" for name in subreddit_names)
+
+    result = call_groq_ai(
+        system_prompt=f"""You are a relevance checker. Given a business description, decide whether each subreddit is a plausible place to find potential leads or customers for that business.
+
+BUSINESS CONTEXT:
+{user_context}
+
+A subreddit is RELEVANT if its typical audience or content could reasonably overlap with the business's target customers or topic — even if it is not a perfect match.
+A subreddit is IRRELEVANT if its subject matter has no realistic connection to the business at all.
+
+Respond ONLY with valid JSON.""",
+        user_message=f"""Check whether these subreddits are relevant to the business context above:
+
+{subs_text}
+
+Respond ONLY with valid JSON:
+{{
+  "results": [
+    {{
+      "name": "subreddit_name",
+      "is_relevant": true,
+      "reason": "Brief reason"
+    }}
+  ]
+}}""",
+        temperature=0.2,
+        max_tokens=600,
+        token_category='subreddit_discovery'
+    )
+
+    _fallback = {'valid': subreddit_names, 'invalid': []}
+
+    if not result:
+        return _fallback
+
+    try:
+        if result.startswith('```'):
+            result = result.split('```')[1]
+            if result.startswith('json'):
+                result = result[4:]
+            result = result.strip()
+        data = json.loads(result)
+        results = data.get('results', [])
+
+        valid   = [r['name'] for r in results if r.get('is_relevant', True)]
+        invalid = [
+            {'name': r['name'], 'reason': r.get('reason', 'Does not match your business context')}
+            for r in results if not r.get('is_relevant', True)
+        ]
+        return {'valid': valid, 'invalid': invalid}
+    except Exception as e:
+        print(f"[WARN] validate_manual_subreddits parse error: {e}")
+        return _fallback
+
+
 # =====================================================
 # PAGE ROUTES 
 # =====================================================
@@ -733,6 +783,28 @@ def discover_subreddits_endpoint():
     )
     print_api_stats()
     return jsonify({'success': True, 'subreddits': subreddits, 'prompt': prompt})
+
+
+@app.route('/api/validate-subreddits', methods=['POST'])
+@require_auth
+def validate_subreddits_endpoint():
+    data             = request.json
+    manual_subs      = data.get('manual_subreddits', [])
+    prompt           = data.get('prompt', '').strip()
+    company          = data.get('company', '').strip()
+    niche            = data.get('niche', '').strip()
+
+    if not manual_subs:
+        return jsonify({'success': True, 'valid': [], 'invalid': []})
+
+    context_lines = []
+    if company: context_lines.append(f"Company: {company}")
+    if niche:   context_lines.append(f"Niche/Industry: {niche}")
+    if prompt:  context_lines.append(f"Description: {prompt}")
+    full_context = "\n".join(context_lines)
+
+    result = validate_manual_subreddits(manual_subs, full_context)
+    return jsonify({'success': True, **result})
 
 
 @app.route('/api/fetch-leads', methods=['POST'])
@@ -871,19 +943,11 @@ def generate_response():
     # Prefer server-stored prompt; fall back to what the frontend sent
     user_context = state.get('user_prompt') or data.get('user_context', '')
 
-    ai_dm_response, ai_comment_response = generate_ai_response(post, user_context)
-    post['ai_response_generated']  = True
-    post['ai_response']            = ai_dm_response  # keep for backward compat
-    post['ai_dm_response']         = ai_dm_response
-    post['ai_comment_response']    = ai_comment_response
+    ai_response = generate_ai_response(post, user_context)
+    post['ai_response_generated'] = True
+    post['ai_response']           = ai_response
 
-    return jsonify({
-        'success': True,
-        'post_id': post_id,
-        'ai_response': ai_dm_response,
-        'ai_dm_response': ai_dm_response,
-        'ai_comment_response': ai_comment_response
-    })
+    return jsonify({'success': True, 'post_id': post_id, 'ai_response': ai_response})
 
 
 @app.route('/api/save-lead', methods=['POST'])
