@@ -46,8 +46,7 @@ reddit = praw.Reddit(
 # LLM client is initialised in llm_client.py (set LLM_PROVIDER in .env)
 
 # =====================================================
-# PER-USER SESSION STATE  (replaces bare globals)
-# Key: user_id (str)  Value: dict with posts/ids/prompt
+# PER-USER SESSION STATE  
 # =====================================================
 _user_states = {}
 _user_states_lock = threading.Lock()
@@ -175,7 +174,7 @@ def call_groq_ai(system_prompt, user_message, temperature=0.3,
 
 
 # =====================================================
-# SUBREDDIT DISCOVERY  (unchanged logic)
+# SUBREDDIT DISCOVERY  
 # =====================================================
 
 def discover_subreddits(prompt, company='', niche=''):
@@ -231,7 +230,7 @@ Respond ONLY with valid JSON:
 
 
 # =====================================================
-# POST ANALYSIS  (unchanged logic, thread-safe)
+# POST ANALYSIS  
 # =====================================================
 
 def analyze_post_with_ai(post_data, user_context):
@@ -243,8 +242,8 @@ def analyze_post_with_ai(post_data, user_context):
 
 CRITICAL RULES:
 1. ONLY score high (70+) if the post shows ACTIVE HELP-SEEKING or PROBLEM-SOLVING intent
-2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed", discussions {user_context}
-3. REJECT posts that are just: news, success stories, announcements, general chat
+2. Look for: questions, "how do I", "need help", "looking for", "struggling with", "advice needed"
+3. REJECT posts that are just: news, discussions, success stories, announcements, general chat
 4. The post must show the person WANTS a solution or service that matches the business above
 5. Keyword matches alone are NOT enough - intent is everything
 
@@ -257,7 +256,7 @@ Content: {post_data['content'][:1000]}
 
 Respond ONLY with valid JSON:
 {{
-  "relevancy_score":  "<0-100>%",
+  "relevancy_score": <0-100>,
   "is_help_seeking": <true/false>,
   "help_seeking_signals": ["signal1", "signal2"],
   "reasoning": "<2-3 sentences>",
@@ -394,22 +393,23 @@ Respond ONLY with valid JSON array (one object per post, in order):
     #- Only mention the company/service if it is a genuinely natural fit
 
 # =====================================================
-# RESPONSE GENERATION  (unchanged logic)
+# RESPONSE GENERATION 
 # =====================================================
 
 def generate_ai_response(post_data, user_context):
-    result = call_groq_ai(
-        system_prompt=f"""You are a knowledgeable Redditor replying to a post.
+    dm_result = call_groq_ai(
+        system_prompt=f"""You are crafting a genuine, helpful direct message to a Reddit user who posted about a problem you can help with.
 
 {user_context}
 
 Rules:
-- Keep the reply SHORT (3-5 sentences max)
-- Directly address the person's specific pain point
-- Provide one concrete, actionable insight
-- Mention the company/service and niche in a genuinely natural fit that looks like a real recommendation, not an ad
-- Sound like a real person, not a marketer""",
-        user_message=f"""Write a concise Reddit reply to this post:
+- Write 3-5 sentences as a direct message (DM)
+- Directly address the person's specific pain point from their post
+- Provide one concrete, actionable insight or offer
+- Mention the company/service naturally as a real recommendation, not an ad
+- Sound like a real person reaching out, not a marketer
+- Do not use em-dashes in your response""",
+        user_message=f"""Write a personalized DM response to this Reddit post:
 
 Title: {post_data['title']}
 Content: {post_data['content'][:1200]}
@@ -418,11 +418,36 @@ Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
         max_tokens=300,
         token_category='response_generation'
     )
-    return result if result else "Unable to generate response."
+
+    comment_result = call_groq_ai(
+        system_prompt=f"""You are a knowledgeable Redditor writing a public reply to a post.
+
+{user_context}
+
+Rules:
+- Write 3-5 sentences as a public comment reply
+- Directly address the person's specific pain point
+- Provide one concrete, actionable insight
+- Mention the company/service in a genuinely natural fit that looks like a real recommendation, not an ad
+- Sound like a real person, not a marketer
+- Do not use em-dashes in your response""",
+        user_message=f"""Write a concise Reddit comment reply to this post:
+
+Title: {post_data['title']}
+Content: {post_data['content'][:1200]}
+Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
+        temperature=0.7,
+        max_tokens=300,
+        token_category='response_generation'
+    )
+
+    dm = (dm_result or "Unable to generate DM response.").replace('\u2014', '-').replace('\u2013', '-')
+    comment = (comment_result or "Unable to generate comment response.").replace('\u2014', '-').replace('\u2013', '-')
+    return dm, comment
 
 
 # =====================================================
-# POST NORMALIZER  (unchanged)
+# POST NORMALIZER  
 # =====================================================
 
 def normalize_post(submission):
@@ -441,7 +466,7 @@ def normalize_post(submission):
 
 
 # =====================================================
-# REDDIT FETCHER  — now thread-safe via _reddit_lock
+# REDDIT FETCHER 
 # =====================================================
 
 def fetch_posts_from_subreddit(subreddit_name: str, latest_count: int = 30,
@@ -493,7 +518,7 @@ def fetch_posts_from_subreddit(subreddit_name: str, latest_count: int = 30,
 # PARALLEL REDDIT FETCHER
 # =====================================================
 # Workers: 3 — enough to overlap network wait time while staying well within
-# Reddit's rate limits (≤ 60 req/min for OAuth apps).
+# Reddit's rate limits (≤ 60 req/min for OAuth apps). I think 
 REDDIT_WORKERS = 3
 
 def fetch_all_subreddits_parallel(subreddits: list, posts_per_subreddit: int,
@@ -624,7 +649,7 @@ def process_and_analyze_posts_parallel(posts: list, user_context: str) -> list:
 
 
 # =====================================================
-# PAGE ROUTES  (serve HTML templates — unchanged)
+# PAGE ROUTES 
 # =====================================================
 
 @app.route('/')
@@ -653,7 +678,7 @@ def forgot_password_page():
 
 
 # =====================================================
-# AUTH DECORATOR  (applied to all mutating routes)
+# AUTH DECORATOR  
 # =====================================================
 from functools import wraps
 
@@ -846,11 +871,19 @@ def generate_response():
     # Prefer server-stored prompt; fall back to what the frontend sent
     user_context = state.get('user_prompt') or data.get('user_context', '')
 
-    ai_response = generate_ai_response(post, user_context)
-    post['ai_response_generated'] = True
-    post['ai_response']           = ai_response
+    ai_dm_response, ai_comment_response = generate_ai_response(post, user_context)
+    post['ai_response_generated']  = True
+    post['ai_response']            = ai_dm_response  # keep for backward compat
+    post['ai_dm_response']         = ai_dm_response
+    post['ai_comment_response']    = ai_comment_response
 
-    return jsonify({'success': True, 'post_id': post_id, 'ai_response': ai_response})
+    return jsonify({
+        'success': True,
+        'post_id': post_id,
+        'ai_response': ai_dm_response,
+        'ai_dm_response': ai_dm_response,
+        'ai_comment_response': ai_comment_response
+    })
 
 
 @app.route('/api/save-lead', methods=['POST'])
@@ -1032,7 +1065,7 @@ def test_connection():
 
 
 # =====================================================
-# AUTHENTICATION ROUTES  (completely unchanged)
+# AUTHENTICATION ROUTES 
 # =====================================================
 
 import threading
@@ -1143,7 +1176,7 @@ def update_profile():
     
     return jsonify(result)
 # =====================================================
-# APP INITIALIZATION & SHUTDOWN  (unchanged)
+# APP INITIALIZATION & SHUTDOWN  
 # =====================================================
 
 @app.before_request
