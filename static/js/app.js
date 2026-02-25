@@ -431,7 +431,7 @@ function renderLeads() {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}/100
+                    ${lead.relevancy_score}%
                 </div>
             </div>
             
@@ -465,10 +465,23 @@ function renderLeads() {
             ${lead.ai_response_generated ? `
             <div class="ai-response-section">
                 <div class="ai-response-header">
-                    <span>AI-Generated Response</span>
+                    <span>AI-Generated Responses</span>
                 </div>
-                <div class="ai-response-text-content">${escapeHtml(lead.ai_response)}</div>
-            </div>  
+                <div style="margin-top:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <strong style="font-size:13px;">DM Response</strong>
+                        <button onclick="copyResponseById('${lead.id}','dm')" class="btn btn-secondary btn-sm">Copy DM</button>
+                    </div>
+                    <div class="ai-response-text-content">${escapeHtml(lead.ai_dm_response || '')}</div>
+                </div>
+                <div style="margin-top:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <strong style="font-size:13px;">Comment Response</strong>
+                        <button onclick="copyResponseById('${lead.id}','comment')" class="btn btn-secondary btn-sm">Copy Comment</button>
+                    </div>
+                    <div class="ai-response-text-content">${escapeHtml(lead.ai_comment_response || '')}</div>
+                </div>
+            </div>
             ` : ''}
             
             <div class="lead-actions">
@@ -491,14 +504,7 @@ function renderLeads() {
                 <button onclick="generateAIResponse('${lead.id}')" class="btn btn-success btn-sm">
                     Generate AI Response
                 </button>
-                ` : `
-                <button onclick="showResponseModal('${lead.id}')" class="btn btn-secondary btn-sm">
-                    View Full Response
-                </button>
-                <button onclick="copyResponse('${lead.id}')" class="btn btn-secondary btn-sm">
-                    Copy Response
-                </button>
-                `}
+                ` : ``}
             </div>
         </div>
     `).join('');
@@ -566,6 +572,8 @@ async function generateAIResponse(postId) {
             if (lead) {
                 lead.ai_response_generated = true;
                 lead.ai_response = result.ai_response;
+                lead.ai_dm_response = result.ai_dm_response || result.ai_response;
+                lead.ai_comment_response = result.ai_comment_response || result.ai_response;
             }
             renderLeads();
             showToast('AI response generated successfully!', 'success');
@@ -587,6 +595,19 @@ function showResponseModal(postId) {
     elements.aiResponseText.textContent = lead.ai_response;
     elements.aiResponseModal.classList.remove('hidden');
 }
+
+function copyResponseById(postId, type) {
+    const lead = allLeads.find(l => l.id === postId);
+    if (!lead) return;
+    const text = type === 'dm' ? lead.ai_dm_response : lead.ai_comment_response;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`${type === 'dm' ? 'DM' : 'Comment'} response copied!`, 'success');
+    }).catch(() => {
+        showToast('Failed to copy response', 'error');
+    });
+}
+window.copyResponseById = copyResponseById;
 
 function copyResponse(postId) {
     const lead = allLeads.find(l => l.id === postId);
@@ -645,7 +666,7 @@ function renderSavedLeads(leads) {
                     </div>
                 </div>
                 <div class="score-badge ${getScoreClass(lead.relevancy_score)}">
-                    ${lead.relevancy_score}/100
+                    ${lead.relevancy_score}%
                 </div>
             </div>
             
@@ -996,4 +1017,3 @@ window.dismissPost = dismissPost;
 console.log('AI Lead Discovery Platform initialized');
 
 console.log('Enter your product/service description to begin');
-
