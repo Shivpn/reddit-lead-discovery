@@ -409,18 +409,19 @@ Respond ONLY with valid JSON array (one object per post, in order):
 # =====================================================
 
 def generate_ai_response(post_data, user_context):
-    result = call_groq_ai(
-        system_prompt=f"""You are a knowledgeable Redditor replying to a post.
+    dm_result = call_groq_ai(
+        system_prompt=f"""You are crafting a genuine, helpful direct message to a Reddit user who posted about a problem you can help with.
 
 {user_context}
 
 Rules:
-- Keep the reply SHORT (3-5 sentences max)
-- Directly address the person's specific pain point
-- Provide one concrete, actionable insight
-- Mention the company/service and niche in a genuinely natural fit that looks like a real recommendation, not an ad
-- Sound like a real person, not a marketer""",
-        user_message=f"""Write a concise Reddit reply to this post:
+- Write 3-5 sentences as a direct message (DM)
+- Directly address the person's specific pain point from their post
+- Provide one concrete, actionable insight or offer
+- Mention the company/service naturally as a real recommendation, not an ad
+- Sound like a real person reaching out, not a marketer
+- Do not use em-dashes in your response""",
+        user_message=f"""Write a personalized DM response to this Reddit post:
 
 Title: {post_data['title']}
 Content: {post_data['content'][:1200]}
@@ -429,7 +430,32 @@ Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
         max_tokens=300,
         token_category='response_generation'
     )
-    return result if result else "Unable to generate response."
+
+    comment_result = call_groq_ai(
+        system_prompt=f"""You are a knowledgeable Redditor writing a public reply to a post.
+
+{user_context}
+
+Rules:
+- Write 3-5 sentences as a public comment reply
+- Directly address the person's specific pain point
+- Provide one concrete, actionable insight
+- Mention the company/service in a genuinely natural fit that looks like a real recommendation, not an ad
+- Sound like a real person, not a marketer
+- Do not use em-dashes in your response""",
+        user_message=f"""Write a concise Reddit comment reply to this post:
+
+Title: {post_data['title']}
+Content: {post_data['content'][:1200]}
+Key pain points: {', '.join(post_data.get('key_pain_points', []))}""",
+        temperature=0.7,
+        max_tokens=300,
+        token_category='response_generation'
+    )
+
+    dm = (dm_result or "Unable to generate DM response.").replace('\u2014', '-').replace('\u2013', '-')
+    comment = (comment_result or "Unable to generate comment response.").replace('\u2014', '-').replace('\u2013', '-')
+    return dm, comment
 
 
 # =====================================================
@@ -943,11 +969,19 @@ def generate_response():
     # Prefer server-stored prompt; fall back to what the frontend sent
     user_context = state.get('user_prompt') or data.get('user_context', '')
 
-    ai_response = generate_ai_response(post, user_context)
+    ai_dm_response, ai_comment_response = generate_ai_response(post, user_context)
     post['ai_response_generated'] = True
-    post['ai_response']           = ai_response
+    post['ai_response']           = ai_dm_response
+    post['ai_dm_response']        = ai_dm_response
+    post['ai_comment_response']   = ai_comment_response
 
-    return jsonify({'success': True, 'post_id': post_id, 'ai_response': ai_response})
+    return jsonify({
+        'success': True,
+        'post_id': post_id,
+        'ai_response': ai_dm_response,
+        'ai_dm_response': ai_dm_response,
+        'ai_comment_response': ai_comment_response
+    })
 
 
 @app.route('/api/save-lead', methods=['POST'])
